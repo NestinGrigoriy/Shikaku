@@ -1,5 +1,6 @@
 import sys
 from copy import deepcopy
+from itertools import product
 
 
 def read_puzzle(filename: str) -> list[list[int]]:
@@ -124,32 +125,18 @@ def main() -> None:
         print("Ошибка: сумма чисел не равна количеству ячеек. Невозможно найти решение.")
         return
     for r, c, num in numbers:
-        possible = False
-        for h in range(1, num + 1):
-            if num % h != 0:
-                continue
-            w = num // h
-            for tr in range(max(0, r - h + 1), min(len(puzzle) - h + 1, r + 1)):
-                for tc in range(max(0, c - w + 1), min(len(puzzle[0]) - w + 1, c + 1)):
-                    conflict = False
-                    for dr in range(h):
-                        for dc in range(w):
-                            x, y = tr + dr, tc + dc
-                            if puzzle[x][y] != 0 and (x != r or y != c):
-                                conflict = True
-                                break
-                        if conflict:
-                            break
-                    if not conflict:
-                        possible = True
-                        break
-                if possible:
-                    break
-            if possible:
-                break
-        if not possible:
-            print(f"Ошибка: невозможно разместить число {num} в ({r}, {c})")
-            return
+        possible = any(
+            not any(
+                puzzle[tr + dr][tc + dc] != 0 and (tr + dr != r or tc + dc != c)
+                for dr, dc in product(range(h), range(w))
+            )
+            for h in filter(lambda h: num % h == 0, range(1, num + 1))
+            for w in [num // h]
+            for tr in range(max(0, r - h + 1), min(len(puzzle) - h + 1, r + 1))
+            for tc in range(max(0, c - w + 1), min(len(puzzle[0]) - w + 1, c + 1))
+        )
+
+        possible or print(f"Ошибка: невозможно разместить число {num} в ({r}, {c})") or exit()
 
     solutions: list[list[list[int]]] = []
     solve_shikaku(puzzle, numbers, solutions)
