@@ -1,6 +1,11 @@
-import sys
+import json
+import os
+import tkinter as tk
 from copy import deepcopy
 from itertools import product
+from tkinter import Tk, filedialog, messagebox
+
+STATE_FILE = "last_state.json"
 
 
 def read_puzzle(filename: str) -> list[list[int]]:
@@ -9,30 +14,14 @@ def read_puzzle(filename: str) -> list[list[int]]:
         with open(filename) as f:
             puzzle = [list(map(int, line.strip().split())) for line in f if line.strip()]
         if not puzzle:
-            print("Ошибка: файл пуст.")
-            sys.exit(1)
+            raise ValueError("Файл пуст.")
         width = len(puzzle[0])
         for row in puzzle:
             if len(row) != width:
-                print("Ошибка: файл содержит строки разной длины.")
-                sys.exit(1)
+                raise ValueError("Файл содержит строки разной длины.")
         return puzzle
     except FileNotFoundError:
-        print(f"Ошибка: файл '{filename}' не найден.")
-        sys.exit(1)
-
-
-def print_board(board: list[list[int]]) -> None:
-    """Вывод доски в консоль."""
-    for row in board:
-        formatted_row = []
-        for cell in row:
-            if cell == 0:
-                formatted_row.append(".")
-            else:
-                formatted_row.append(str(cell))
-        print(" ".join(formatted_row))
-    print()
+        raise FileNotFoundError(f"Файл '{filename}' не найден.")
 
 
 def get_numbers_positions(board: list[list[int]]) -> list[tuple[int, int, int]]:
@@ -99,56 +88,133 @@ def solve_shikaku(
                     solve_shikaku(new_board, numbers[1:], solutions)
 
 
-def main() -> None:
-    """Основная функция."""
-    import argparse
+class ShikakuGUI:
+    """Графический Интерфейс"""
 
-    parser = argparse.ArgumentParser(
-        description="Решатель головоломки Shikaku.", epilog="Пример использования: python shikaku_solver.py puzzle.txt"
-    )
-    parser.add_argument(
-        "file",
-        help="Путь к файлу с головоломкой Shikaku. "
-        "Файл должен содержать сетку чисел, разделённых пробелами, где 0 обозначает пустую ячейку.",
-    )
-    args = parser.parse_args()
+    def __init__(self, root: Tk) -> None:
+        self.root = root
+        self.root.title("Shikaku Solver")
+        self.canvas = tk.Canvas(root, width=600, height=600)
+        self.solutions: list[list[list[int]]] = []
+        self.current = 0
+        self.cell_size = 40
 
-    puzzle = read_puzzle(args.file)
-    print("Исходная головоломка:")
-    print_board(puzzle)
+        btn_frame = tk.Frame(root)
+        btn_frame.pack()
 
-    numbers = get_numbers_positions(puzzle)
-    total_cells = len(puzzle) * len(puzzle[0])
-    sum_of_numbers = sum(num for _, _, num in numbers)
+        tk.Button(btn_frame, text="Открыть файл", command=self.load_file).pack(side=tk.LEFT)
+        tk.Button(btn_frame, text="◀", command=self.prev_solution).pack(side=tk.LEFT)
+        tk.Button(btn_frame, text="▶", command=self.next_solution).pack(side=tk.LEFT)
+        self.canvas.pack()
 
-    if sum_of_numbers != total_cells:
-        print("Ошибка: сумма чисел не равна количеству ячеек. Невозможно найти решение.")
-        return
-    for r, c, num in numbers:
-        possible = any(
-            not any(
-                puzzle[tr + dr][tc + dc] != 0 and (tr + dr != r or tc + dc != c)
-                for dr, dc in product(range(h), range(w))
+        self.last_filepath = ""
+        self.load_state()
+
+    def draw_board(self, board: list[list[int]]) -> None:
+        """Рендеринг поля"""
+        self.canvas.delete("all")
+        rows, cols = len(board), len(board[0])
+        for r in range(rows):
+            for c in range(cols):
+                x1 = c * self.cell_size
+                y1 = r * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                val = board[r][c]
+                hex1 = (val * 25) % 255
+                hex2 = (val * 50) % 255
+                hex3 = (val * 75) % 255
+                color = f"#%02x%02x%02x" % (hex1, hex2, hex3) if val != 0 else "white"
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="black")
+                if val != 0:
+                    self.canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=str(val), font=("Arial", 12))
+
+    def load_file(self) -> None:
+        """Загрузка файла"""
+        file = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        if not file:
+            return
+        try:
+            puzzle = read_puzzle(file)
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+            return
+
+        numbers = get_numbers_positions(puzzle)
+        total_cells = len(puzzle) * len(puzzle[0])
+        sum_of_numbers = sum(num for _, _, num in numbers)
+
+        if sum_of_numbers != total_cells:
+            messagebox.showerror("Ошибка", "Сумма чисел не равна количеству ячеек.")
+            return
+
+        for r, c, num in numbers:
+            possible = any(
+                not any(
+                    puzzle[tr + dr][tc + dc] != 0 and (tr + dr != r or tc + dc != c)
+                    for dr, dc in product(range(h), range(w))
+                )
+                for h in filter(lambda h: num % h == 0, range(1, num + 1))
+                for w in [num // h]
+                for tr in range(max(0, r - h + 1), min(len(puzzle) - h + 1, r + 1))
+                for tc in range(max(0, c - w + 1), min(len(puzzle[0]) - w + 1, c + 1))
             )
-            for h in filter(lambda h: num % h == 0, range(1, num + 1))
-            for w in [num // h]
-            for tr in range(max(0, r - h + 1), min(len(puzzle) - h + 1, r + 1))
-            for tc in range(max(0, c - w + 1), min(len(puzzle[0]) - w + 1, c + 1))
-        )
+            if not possible:
+                messagebox.showerror("Ошибка", f"Невозможно разместить число {num} в ({r}, {c})")
+                return
 
-        possible or print(f"Ошибка: невозможно разместить число {num} в ({r}, {c})") or exit()
+        self.solutions.clear()
+        solve_shikaku(puzzle, numbers, self.solutions)
+        if not self.solutions:
+            messagebox.showinfo("Результат", "Решения не найдены.")
+        else:
+            self.current = 0
+            self.last_filepath = file
+            self.save_state(file)
+            self.draw_board(self.solutions[0])
 
-    solutions: list[list[list[int]]] = []
-    solve_shikaku(puzzle, numbers, solutions)
+    def next_solution(self) -> None:
+        """Показывает следующее решение"""
+        if self.solutions:
+            self.current = (self.current + 1) % len(self.solutions)
+            self.draw_board(self.solutions[self.current])
+            self.save_state(self.last_filepath)
 
-    if not solutions:
-        print("Решений не найдено. Возможно, головоломка некорректна или содержит противоречия.")
-    else:
-        print(f"Найдено {len(solutions)} решений:\n")
-        for idx, solution in enumerate(solutions, 1):
-            print(f"Решение #{idx}:")
-            print_board(solution)
+    def prev_solution(self) -> None:
+        """Показывает предыдущее решение"""
+        if self.solutions:
+            self.current = (self.current - 1) % len(self.solutions)
+            self.draw_board(self.solutions[self.current])
+            self.save_state(self.last_filepath)
+
+    def save_state(self, filepath: str) -> None:
+        """Сохранение состояния приложения"""
+        state = {"filepath": filepath, "current": self.current}
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f)
+
+    def load_state(self) -> None:
+        """Загрузка состояния приложения"""
+        if not os.path.exists(STATE_FILE):
+            return
+        try:
+            with open(STATE_FILE) as f:
+                state = json.load(f)
+            filepath = state.get("filepath")
+            self.current = state.get("current", 0)
+            if filepath and os.path.exists(filepath):
+                puzzle = read_puzzle(filepath)
+                numbers = get_numbers_positions(puzzle)
+                self.solutions.clear()
+                solve_shikaku(puzzle, numbers, self.solutions)
+                if self.solutions:
+                    self.draw_board(self.solutions[self.current % len(self.solutions)])
+                self.last_filepath = filepath
+        except Exception as e:
+            print("Ошибка восстановления состояния:", e)
 
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = ShikakuGUI(root)
+    root.mainloop()
