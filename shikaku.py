@@ -124,7 +124,7 @@ class ShikakuGUI:
                 hex1 = (val * 25) % 255
                 hex2 = (val * 50) % 255
                 hex3 = (val * 75) % 255
-                color = f"#%02x%02x%02x" % (hex1, hex2, hex3) if val != 0 else "white"
+                color = f"#{hex1:02x}{hex2:02x}{hex3:02x}" if val != 0 else "white"
                 self.canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="black")
                 if val != 0:
                     self.canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=str(val), font=("Arial", 12))
