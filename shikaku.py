@@ -89,9 +89,10 @@ def solve_shikaku(
 
 
 class ShikakuGUI:
-    """Графический Интерфейс"""
+    """Графический Интерфейс."""
 
     def __init__(self, root: Tk) -> None:
+        """Инициализатор."""
         self.root = root
         self.root.title("Shikaku Solver")
         self.canvas = tk.Canvas(root, width=600, height=600)
@@ -111,7 +112,7 @@ class ShikakuGUI:
         self.load_state()
 
     def draw_board(self, board: list[list[int]]) -> None:
-        """Рендеринг поля"""
+        """Рендеринг поля."""
         self.canvas.delete("all")
         rows, cols = len(board), len(board[0])
         for r in range(rows):
@@ -130,7 +131,7 @@ class ShikakuGUI:
                     self.canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=str(val), font=("Arial", 12))
 
     def load_file(self) -> None:
-        """Загрузка файла"""
+        """Загрузка файла."""
         file = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if not file:
             return
@@ -174,27 +175,27 @@ class ShikakuGUI:
             self.draw_board(self.solutions[0])
 
     def next_solution(self) -> None:
-        """Показывает следующее решение"""
+        """Показывает следующее решение."""
         if self.solutions:
             self.current = (self.current + 1) % len(self.solutions)
             self.draw_board(self.solutions[self.current])
             self.save_state(self.last_filepath)
 
     def prev_solution(self) -> None:
-        """Показывает предыдущее решение"""
+        """Показывает предыдущее решение."""
         if self.solutions:
             self.current = (self.current - 1) % len(self.solutions)
             self.draw_board(self.solutions[self.current])
             self.save_state(self.last_filepath)
 
     def save_state(self, filepath: str) -> None:
-        """Сохранение состояния приложения"""
+        """Сохранение состояния приложения."""
         state = {"filepath": filepath, "current": self.current}
         with open(STATE_FILE, "w") as f:
             json.dump(state, f)
 
     def load_state(self) -> None:
-        """Загрузка состояния приложения"""
+        """Загрузка состояния приложения."""
         if not os.path.exists(STATE_FILE):
             return
         try:
